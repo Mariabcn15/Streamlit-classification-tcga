@@ -68,7 +68,11 @@ with tab1:
 
     with col1:
         st.subheader("Distribusi Grade Tumor")
-        fig_grade = px.histogram(df, x="Grade", color="Grade", barmode="group",
+        df_grade = df.copy()
+        grade_map = {0: "LGG", 1: "GBM"}
+        df_grade["Grade"] = df_grade["Grade"].map(grade_map)
+
+        fig_grade = px.histogram(df_grade, x="Grade", color="Grade", barmode="group",
                                  color_discrete_sequence=["#2ecc71", "#e74c3c"])
         st.plotly_chart(fig_grade, use_container_width=True)
 
