@@ -1,97 +1,211 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.model_selection import train_test_split
 import plotly.express as px
-import plotly.graph_objects as go
-import joblib
-from datetime import datetime
-import json
 
-# Load model components
-@st.cache_resource
-def load_model():
-    try:
-        model = joblib.load("grade_prediction_model.joblib")
-        return model
-    except Exception as e:
-        st.error(f"Model gagal dimuat: {str(e)}")
-        st.stop()
+# Setup halaman
+st.set_page_config(page_title="🧬 Tumor Grade Classifier", layout="wide")
 
-# Prediction function
-def predict_grade(input_data, model):
-    df = pd.DataFrame([input_data])
-    pred = model.predict(df)[0]
-    prob = model.predict_proba(df)[0]
-    return pred, prob
+# Sidebar - Branding & Info
+with st.sidebar:
+    st.image("glioma.jpeg", width=350)
+    st.markdown("## 🧬 Tentang Aplikasi")
+    st.markdown("""
+Aplikasi ini dirancang untuk memprediksi **Grade Tumor Otak** pasien berdasarkan informasi **demografis** dan **mutasi genetik**.
 
-# UI setup
-st.set_page_config(page_title="Genetic Mutation Grade Predictor", layout="wide")
-st.title("🧬 Tumor Grade Prediction Dashboard")
-st.markdown("Dashboard untuk memprediksi grade tumor berdasarkan data mutasi genetik dan demografik.")
+**📁 Sumber Data:** TCGA  
+**🧠 Model:** Decision Tree  
+**🎯 Tujuan:** Mendukung Diagnosis Glioma
+    """)
 
-model = load_model()
+    st.markdown("---")
+    st.markdown("### 👩‍💻 Pengembang")
+    st.markdown("""
+**Azzula Cerliana Zahro**  
+[🔗 LinkedIn Profil](https://www.linkedin.com/in/azzulacerliana)
+    """)
+    st.markdown("""
+**Maria Bernadette Chayeenee Norman**  
+[🔗 LinkedIn Profil](https://www.linkedin.com/in/mariabernadette15)
+    """)
+    st.markdown("""
+**Estri Pramudia Pangestu**  
+[🔗 LinkedIn Profil](https://www.linkedin.com/in/estri-pramudia-pangestu-1457a4263)
+    """)
 
-# Sidebar input
-with st.sidebar.form("input_form"):
-    st.header("Input Pasien")
-    gender = st.selectbox("Gender", [0, 1], format_func=lambda x: "Male" if x == 0 else "Female")
-    age = st.number_input("Age at Diagnosis", min_value=0, max_value=100, value=40)
-    race = st.selectbox("Race", [0, 1, 2, 3], format_func=lambda x: ["White", "Black", "Asian", "Native"][x])
-    
-    gene_cols = ['IDH1','TP53','ATRX','PTEN','EGFR','CIC','MUC16','PIK3CA','NF1','PIK3R1',
-                 'FUBP1','RB1','NOTCH1','BCOR','CSMD3','SMARCA4','GRIN2A','IDH2','FAT4','PDGFRA']
-    
-    gene_mutations = {gene: st.selectbox(gene, [0, 1]) for gene in gene_cols}
-    
-    submit = st.form_submit_button("🔮 Predict")
 
-# Process prediction
-if submit:
-    input_data = {
-        'Gender': gender,
-        'Age_at_diagnosis': age,
-        'Race': race,
-        **gene_mutations
-    }
-    pred, prob = predict_grade(input_data, model)
+# Load data
+@st.cache_data
+def load_data():
+    return pd.read_csv("TCGA.csv")
 
-    st.subheader("📊 Prediction Result")
-    st.success(f"Predicted Grade: **{pred}**")
+df = load_data()
 
-    fig = px.bar(x=['II', 'III', 'IV'], y=prob, labels={'x': 'Grade', 'y': 'Probability'},
-                 title="Probabilitas Prediksi", color=prob, color_continuous_scale='viridis')
-    st.plotly_chart(fig, use_container_width=True)
+# Siapkan model
+X = df.drop(columns=["Grade"])
+y = df["Grade"]
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+model = DecisionTreeClassifier(random_state=42)
+model.fit(X_train, y_train)
 
-    export_data = {
-        "timestamp": datetime.now().isoformat(),
-        "input": input_data,
-        "prediction": {
-            "grade": pred,
-            "probability": list(prob)
+# Fitur genetik
+gen_features = ['IDH1', 'TP53', 'ATRX', 'PTEN', 'EGFR', 'CIC', 'MUC16', 'PIK3CA', 'NF1',
+                'PIK3R1', 'FUBP1', 'RB1', 'NOTCH1', 'BCOR', 'CSMD3', 'SMARCA4', 'GRIN2A',
+                'IDH2', 'FAT4', 'PDGFRA']
+
+# Tabs utama
+tab1, tab2, tab3 = st.tabs(["📊 EDA", "🔍 Prediksi Tumor", "📈 Insight Model"])
+
+# =======================================
+# TAB 1: EDA
+# =======================================
+with tab1:
+    st.header("📊 Exploratory Data Analysis (EDA)")
+    st.markdown("Data terdiri dari berbagai mutasi gen dan fitur demografis untuk memprediksi tumor low/high grade.")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.subheader("Distribusi Grade Tumor")
+        fig_grade = px.histogram(df, x="Grade", color="Grade", barmode="group",
+                                 color_discrete_sequence=["#2ecc71", "#e74c3c"])
+        st.plotly_chart(fig_grade, use_container_width=True)
+
+    with col2:
+        st.subheader("Gender Pasien Tumor")
+
+        df_gender = df.copy()
+        gender_map = {0: "Male", 1: "Female"}
+        df_gender["Gender_Label"] = df_gender["Gender"].map(gender_map)
+
+        fig_gender = px.histogram(df_gender, x="Gender_Label", color="Gender_Label", 
+                                  color_discrete_sequence=["#3498db", "#9b59b6"])
+        st.plotly_chart(fig_gender, use_container_width=True)
+
+# =======================================
+# TAB 2: Prediksi Interaktif
+# =======================================
+with tab2:
+    if "predict_clicked" not in st.session_state:
+        st.session_state.predict_clicked = False
+
+    st.header("🔍 Prediksi Interaktif Tumor Grade")
+    st.markdown("Masukkan data pasien untuk memprediksi apakah tumor termasuk **High Grade** atau **Low Grade**.")
+
+    col_left, col_right = st.columns([1.5, 1])
+    input_data = {}
+
+    with col_left:
+        st.subheader("🧍‍♀️ Data Pasien")
+
+        gender_label = st.selectbox("🚻 Gender", ["Male", "Female"], key="gender_input")
+        race_label = st.selectbox("🌍 Ras", 
+            ["White", "Black or African American", "Asian", "American Indian or Alaska Native"], key="race_input")
+        age_value = st.slider("📅 Umur saat Diagnosis", 
+                              float(df["Age_at_diagnosis"].min()), 
+                              float(df["Age_at_diagnosis"].max()), 
+                              float(df["Age_at_diagnosis"].mean()), step=1.0, key="age_input")
+
+        gender_map = {"Male": 0, "Female": 1}
+        race_map = {
+            "White": 0,
+            "Black or African American": 1,
+            "Asian": 2,
+            "American Indian or Alaska Native": 3
         }
-    }
 
-    st.download_button("📥 Download Prediction Result", data=json.dumps(export_data, indent=2),
-                       file_name="grade_prediction_result.json", mime="application/json")
+        input_data["Gender"] = gender_map[gender_label]
+        input_data["Race"] = race_map[race_label]
+        input_data["Age_at_diagnosis"] = age_value
 
-# Optional: Load dataset for visualization
-if st.checkbox("📂 Tampilkan Statistik Dataset"):
-    uploaded = st.file_uploader("Upload Dataset CSV", type=["csv"])
-    if uploaded:
-        df = pd.read_csv(uploaded)
+        # Mutasi genetik dalam expander
+        with st.expander("🧬 Klik untuk masukkan mutasi genetik"):
+            st.markdown("*Pilih status mutasi setiap gen: 0 = Tidak bermutasi, 1 = Bermutasi*")
+            gen_cols = st.columns(3)
 
-        st.markdown("### 📈 Distribusi Umur")
-        st.plotly_chart(px.histogram(df, x="Age_at_diagnosis", nbins=20), use_container_width=True)
+            for idx, gene in enumerate(gen_features):
+                with gen_cols[idx % 3]:
+                    status = st.radio(
+                        f"{gene}", 
+                        ["-- Pilih --", "Not Mutated", "Mutated"], 
+                        horizontal=True, 
+                        key=f"gen_{gene}"
+                    )
+                    if status == "Not Mutated":
+                        input_data[gene] = 0
+                    elif status == "Mutated":
+                        input_data[gene] = 1
+                    else:
+                        input_data[gene] = None  # Belum dipilih
 
-        st.markdown("### ⚧ Distribusi Gender")
-        st.plotly_chart(px.pie(df, names="Gender", title="Gender Distribution", 
-                               labels={0: "Male", 1: "Female"}), use_container_width=True)
+    with col_right:
+        st.subheader("📌 Ringkasan Input")
+        st.write(f"**Gender:** {gender_label}")
+        st.write(f"**Ras:** {race_label}")
+        st.write(f"**Umur:** {int(age_value)} tahun")
 
-        st.markdown("### 🌎 Distribusi Ras")
-        st.plotly_chart(px.histogram(df, x="Race", nbins=5), use_container_width=True)
+        gen_filled = [input_data[g] for g in gen_features if input_data[g] is not None]
+        st.write(f"**Jumlah Gen Bermutasi:** {sum(gen_filled)} / {len(gen_features)}")
 
-        st.markdown("### 🧬 Heatmap Mutasi Genetik")
-        mut_cols = df.columns[4:]  # assume first 4 are non-gene columns
-        heatmap_data = df[mut_cols].corr()
-        st.plotly_chart(px.imshow(heatmap_data, text_auto=True, color_continuous_scale="RdBu"),
-                        use_container_width=True)
+        # Tombol Prediksi
+        if st.button("🔮 Prediksi Tumor Grade", use_container_width=True):
+            if None in input_data.values():
+                st.warning("⚠️ Harap isi semua input termasuk mutasi genetik sebelum memprediksi.")
+            else:
+                try:
+                    user_df = pd.DataFrame([input_data])
+                    user_df = user_df[X.columns]
+                    predicted_grade = model.predict(user_df)[0]
+
+                    grade_text = "🟥 High Grade" if predicted_grade == 1 else "🟩 Low Grade"
+                    grade_color = "#e74c3c" if predicted_grade == 1 else "#2ecc71"
+
+                    st.markdown(
+                        f"""
+                        <div style='padding: 30px; background-color: {grade_color}; color: white; border-radius: 12px; 
+                        text-align: center; font-size: 32px; font-weight: bold;'>
+                            {grade_text}
+                        </div>
+                        """, unsafe_allow_html=True
+                    )
+                    st.session_state.predict_clicked = True
+                except Exception as e:
+                    st.error(f"❌ Terjadi kesalahan saat prediksi: {str(e)}")
+
+        # Tombol Reset akan muncul jika prediksi sudah dilakukan
+        if st.session_state.predict_clicked:
+            if st.button("🔁 Reset"):
+                for key in st.session_state.keys():
+                    del st.session_state[key]
+                st.rerun()
+
+# =======================================
+# TAB 3: Feature Importance
+# =======================================
+with tab3:
+    st.header("📈 Feature Importance dari Model")
+    st.markdown("Visualisasi ini menunjukkan fitur mana yang paling berpengaruh dalam memprediksi grade tumor.")
+
+    feature_importance = model.feature_importances_
+    importance_df = pd.DataFrame({
+        "Feature": X.columns,
+        "Importance": feature_importance
+    }).sort_values(by="Importance", ascending=True)
+
+    fig_imp = px.bar(importance_df, x="Importance", y="Feature", orientation="h",
+                     title="Fitur yang Paling Berpengaruh dalam Prediksi",
+                     color="Importance", color_continuous_scale="Inferno")
+
+    fig_imp.update_layout(height=600, margin=dict(l=20, r=20, t=40, b=20))
+    st.plotly_chart(fig_imp, use_container_width=True)
+
+# # =======================================
+# # Footer
+# # =======================================
+# st.markdown("---")
+# st.markdown(
+#     "<center>© 2025 - Azzula Cerliana Zahro | "
+#     "<a href='https://www.linkedin.com/in/linkedin-kamu' target='_blank'>LinkedIn</a></center>",
+#     unsafe_allow_html=True
+# )
