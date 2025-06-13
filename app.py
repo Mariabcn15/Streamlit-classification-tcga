@@ -9,7 +9,7 @@ import plotly.express as px
 
 st.set_page_config(page_title="UAS Tumor Grade Classifier", layout="wide")
 st.title("🧬 Tumor Grade Classifier Dashboard")
-st.markdown("Analisis dataset pasien dan prediksi klasifikasi *tumor grade* berdasarkan fitur biologis dan demografis.")
+st.markdown("Analisis dataset pasien dan prediksi klasifikasi tumor grade berdasarkan fitur biologis dan demografis.")
 
 # Load data
 @st.cache_data
