@@ -77,9 +77,9 @@ with tab1:
 
         df_gender = df.copy()
         gender_map = {0: "Male", 1: "Female"}
-        df_gender["Gender_Label"] = df_gender["Gender"].map(gender_map)
+        df_gender["Gender"] = df_gender["Gender"].map(gender_map)
 
-        fig_gender = px.histogram(df_gender, x="Gender_Label", color="Gender_Label", 
+        fig_gender = px.histogram(df_gender, x="Gender", color="Gender", 
                                   color_discrete_sequence=["#3498db", "#9b59b6"])
         st.plotly_chart(fig_gender, use_container_width=True)
 
