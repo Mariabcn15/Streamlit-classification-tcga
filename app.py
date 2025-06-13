@@ -1,105 +1,97 @@
 import streamlit as st
 import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report
+import numpy as np
 import plotly.express as px
+import plotly.graph_objects as go
+import joblib
+from datetime import datetime
+import json
 
-# Set page config
-st.set_page_config(page_title="UAS Tumor Grade Classifier", layout="wide")
-st.title("🧬 Tumor Grade Classifier Dashboard")
-st.markdown("Analisis dataset pasien dan prediksi klasifikasi *tumor grade* berdasarkan fitur biologis dan demografis.")
+# Load model components
+@st.cache_resource
+def load_model():
+    try:
+        model = joblib.load("grade_prediction_model.joblib")
+        return model
+    except Exception as e:
+        st.error(f"Model gagal dimuat: {str(e)}")
+        st.stop()
 
-# Load data
-@st.cache_data
-def load_data():
-    return pd.read_csv("TCGA.csv")  # Sesuaikan nama file jika berbeda
+# Prediction function
+def predict_grade(input_data, model):
+    df = pd.DataFrame([input_data])
+    pred = model.predict(df)[0]
+    prob = model.predict_proba(df)[0]
+    return pred, prob
 
-df = load_data()
+# UI setup
+st.set_page_config(page_title="Genetic Mutation Grade Predictor", layout="wide")
+st.title("🧬 Tumor Grade Prediction Dashboard")
+st.markdown("Dashboard untuk memprediksi grade tumor berdasarkan data mutasi genetik dan demografik.")
 
-# EDA Section
-st.header("📊 Exploratory Data Analysis")
-col1, col2 = st.columns(2)
+model = load_model()
 
-with col1:
-    st.subheader("Distribusi Grade Tumor")
-    st.bar_chart(df['Grade'].value_counts())
+# Sidebar input
+with st.sidebar.form("input_form"):
+    st.header("Input Pasien")
+    gender = st.selectbox("Gender", [0, 1], format_func=lambda x: "Male" if x == 0 else "Female")
+    age = st.number_input("Age at Diagnosis", min_value=0, max_value=100, value=40)
+    race = st.selectbox("Race", [0, 1, 2, 3], format_func=lambda x: ["White", "Black", "Asian", "Native"][x])
+    
+    gene_cols = ['IDH1','TP53','ATRX','PTEN','EGFR','CIC','MUC16','PIK3CA','NF1','PIK3R1',
+                 'FUBP1','RB1','NOTCH1','BCOR','CSMD3','SMARCA4','GRIN2A','IDH2','FAT4','PDGFRA']
+    
+    gene_mutations = {gene: st.selectbox(gene, [0, 1]) for gene in gene_cols}
+    
+    submit = st.form_submit_button("🔮 Predict")
 
-with col2:
-    st.subheader("Statistik Umur Pasien")
-    st.write(df['Age_at_diagnosis'].describe())
+# Process prediction
+if submit:
+    input_data = {
+        'Gender': gender,
+        'Age_at_diagnosis': age,
+        'Race': race,
+        **gene_mutations
+    }
+    pred, prob = predict_grade(input_data, model)
 
-# Data Split and Model
-X = df.drop(columns=['Grade'])
-y = df['Grade']
-X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+    st.subheader("📊 Prediction Result")
+    st.success(f"Predicted Grade: **{pred}**")
 
-model = DecisionTreeClassifier(random_state=42)
-model.fit(X_train, y_train)
-y_pred = model.predict(X_test)
+    fig = px.bar(x=['II', 'III', 'IV'], y=prob, labels={'x': 'Grade', 'y': 'Probability'},
+                 title="Probabilitas Prediksi", color=prob, color_continuous_scale='viridis')
+    st.plotly_chart(fig, use_container_width=True)
 
-# Interaktif Prediksi
-st.header("🎯 Prediksi Grade Tumor Pasien")
-
-# Daftar fitur mutasi
-categorical_mutations = [
-    'IDH1', 'IDH2', 'TP53', 'ATRX', 'EGFR', 'PTEN', 
-    'CIC', 'FUBP1', 'PIK3CA', 'PIK3R1', 'NF1', 'PDGFRA'
-]
-
-# Input user
-input_data = {}
-for col in X.columns:
-    if col in categorical_mutations:
-        input_data[col] = st.selectbox(f"{col} (0 = not mutated, 1 = mutated)", [0, 1])
-    elif col == 'Gender':
-        input_data[col] = st.selectbox("Gender", options=[0, 1], format_func=lambda x: "Male" if x == 0 else "Female")
-    elif col == 'Race':
-        race_labels = {
-            0: "White",
-            1: "Black or African American",
-            2: "Asian",
-            3: "American Indian or Alaska Native"
+    export_data = {
+        "timestamp": datetime.now().isoformat(),
+        "input": input_data,
+        "prediction": {
+            "grade": pred,
+            "probability": list(prob)
         }
-        input_data[col] = st.selectbox("Race", options=list(race_labels.keys()), format_func=lambda x: race_labels[x])
-    else:
-        input_data[col] = st.slider(
-            f"{col}",
-            float(df[col].min()),
-            float(df[col].max()),
-            float(df[col].mean())
-        )
+    }
 
-# Prediksi
-user_df = pd.DataFrame([input_data])
-predicted_grade = model.predict(user_df)[0]
-st.success(f"Prediksi Grade Tumor: {'High Grade' if predicted_grade == 1 else 'Low Grade'}")
+    st.download_button("📥 Download Prediction Result", data=json.dumps(export_data, indent=2),
+                       file_name="grade_prediction_result.json", mime="application/json")
 
-# Feature Importance
-st.subheader("📊 Feature Importance")
+# Optional: Load dataset for visualization
+if st.checkbox("📂 Tampilkan Statistik Dataset"):
+    uploaded = st.file_uploader("Upload Dataset CSV", type=["csv"])
+    if uploaded:
+        df = pd.read_csv(uploaded)
 
-try:
-    feature_names = X.columns
-    feature_importance = model.feature_importances_
+        st.markdown("### 📈 Distribusi Umur")
+        st.plotly_chart(px.histogram(df, x="Age_at_diagnosis", nbins=20), use_container_width=True)
 
-    importance_df = pd.DataFrame({
-        'Feature': feature_names,
-        'Importance': feature_importance
-    }).sort_values('Importance', ascending=True)
+        st.markdown("### ⚧ Distribusi Gender")
+        st.plotly_chart(px.pie(df, names="Gender", title="Gender Distribution", 
+                               labels={0: "Male", 1: "Female"}), use_container_width=True)
 
-    fig_importance = px.bar(
-        importance_df,
-        x='Importance',
-        y='Feature',
-        orientation='h',
-        title='Feature Importance in Decision Tree Model',
-        color='Importance',
-        color_continuous_scale='viridis'
-    )
-    fig_importance.update_layout(height=500, margin=dict(l=20, r=20, t=40, b=20))
-    st.plotly_chart(fig_importance, use_container_width=True)
+        st.markdown("### 🌎 Distribusi Ras")
+        st.plotly_chart(px.histogram(df, x="Race", nbins=5), use_container_width=True)
 
-except Exception as e:
-    st.error(f"Error displaying feature importance: {str(e)}")
+        st.markdown("### 🧬 Heatmap Mutasi Genetik")
+        mut_cols = df.columns[4:]  # assume first 4 are non-gene columns
+        heatmap_data = df[mut_cols].corr()
+        st.plotly_chart(px.imshow(heatmap_data, text_auto=True, color_continuous_scale="RdBu"),
+                        use_container_width=True)
