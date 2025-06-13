@@ -189,20 +189,10 @@ with tab2:
 # =======================================
 with tab3:
     st.header("📈 Feature Importance dari Model")
-    st.markdown("Visualisasi ini menunjukkan fitur mana yang paling berpengaruh dalam memprediksi grade tumor.")
+    st.markdown("Berikut adalah visualisasi feature importance yang dihasilkan dari Google Colab.")
 
-    feature_importance = model.feature_importances_
-    importance_df = pd.DataFrame({
-        "Feature": X.columns,
-        "Importance": feature_importance
-    }).sort_values(by="Importance", ascending=True)
-
-    fig_imp = px.bar(importance_df, x="Importance", y="Feature", orientation="h",
-                     title="Fitur yang Paling Berpengaruh dalam Prediksi",
-                     color="Importance", color_continuous_scale="Inferno")
-
-    fig_imp.update_layout(height=600, margin=dict(l=20, r=20, t=40, b=20))
-    st.plotly_chart(fig_imp, use_container_width=True)
+    # Tampilkan gambar hasil dari Colab
+    st.image("feature_importance.png", caption="Feature Importance dari Model Decision Tree", use_container_width=True)
 
 # # =======================================
 # # Footer
