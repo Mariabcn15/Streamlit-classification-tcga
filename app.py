@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import joblib
 from sklearn.tree import DecisionTreeClassifier
 from sklearn.model_selection import train_test_split
 import plotly.express as px
@@ -40,14 +41,20 @@ Aplikasi ini dirancang untuk memprediksi **Grade Tumor Otak** pasien berdasarkan
 def load_data():
     return pd.read_csv("TCGA.csv")
 
-df = load_data()
+@st.cache_resource
+def load_model():
+    components = joblib.load("model.joblib")
+    return components['model'], components['columns']
 
-# Siapkan model
-X = df.drop(columns=["Grade"])
-y = df["Grade"]
-X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
-model = DecisionTreeClassifier(random_state=42)
-model.fit(X_train, y_train)
+df = load_data()
+model, model_columns = load_model()
+
+# # Siapkan model
+# X = df.drop(columns=["Grade"])
+# y = df["Grade"]
+# X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, test_size=0.2, random_state=42)
+# model = DecisionTreeClassifier(random_state=42)
+# model.fit(X_train, y_train)
 
 # Fitur genetik
 gen_features = ['IDH1', 'TP53', 'ATRX', 'PTEN', 'EGFR', 'CIC', 'MUC16', 'PIK3CA', 'NF1',
@@ -159,7 +166,7 @@ with tab2:
             else:
                 try:
                     user_df = pd.DataFrame([input_data])
-                    user_df = user_df[X.columns]
+                    user_df = user_df[model_columns]
                     predicted_grade = model.predict(user_df)[0]
 
                     grade_text = "🟥 High Grade" if predicted_grade == 1 else "🟩 Low Grade"
