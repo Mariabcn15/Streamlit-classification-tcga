@@ -42,9 +42,11 @@ def load_data():
     return pd.read_csv("TCGA.csv")
 
 @st.cache_resource
+@st.cache_resource
 def load_model():
-    components = joblib.load("model.joblib")
-    return components['model'], components['columns']
+    model = joblib.load("model.joblib")
+    model_columns = list(model.feature_names_in_)  # jika kamu ingin ambil kolom
+    return model, model_columns
 
 df = load_data()
 model, model_columns = load_model()
@@ -94,12 +96,27 @@ with tab1:
                                   color_discrete_sequence=["#3498db", "#9b59b6"])
         st.plotly_chart(fig_gender, use_container_width=True)
 
-# =======================================
+# # =======================================
 # TAB 2: Prediksi Interaktif
 # =======================================
 with tab2:
+    # Inisialisasi session state untuk input awal jika belum ada
     if "predict_clicked" not in st.session_state:
         st.session_state.predict_clicked = False
+
+    if "gender_input" not in st.session_state:
+        st.session_state.gender_input = "Male"
+
+    if "race_input" not in st.session_state:
+        st.session_state.race_input = "White"
+
+    if "age_input" not in st.session_state:
+        st.session_state.age_input = float(df["Age_at_diagnosis"].mean())
+
+    for gene in gen_features:
+        key = f"gen_{gene}"
+        if key not in st.session_state:
+            st.session_state[key] = "-- Pilih --"
 
     st.header("🔍 Prediksi Interaktif Tumor Grade")
     st.markdown("Masukkan data pasien untuk memprediksi apakah tumor termasuk **High Grade** atau **Low Grade**.")
@@ -110,13 +127,26 @@ with tab2:
     with col_left:
         st.subheader("🧍‍♀️ Data Pasien")
 
-        gender_label = st.selectbox("🚻 Gender", ["Male", "Female"], key="gender_input")
-        race_label = st.selectbox("🌍 Ras", 
-            ["White", "Black or African American", "Asian", "American Indian or Alaska Native"], key="race_input")
-        age_value = st.slider("📅 Umur saat Diagnosis", 
-                              float(df["Age_at_diagnosis"].min()), 
-                              float(df["Age_at_diagnosis"].max()), 
-                              float(df["Age_at_diagnosis"].mean()), step=1.0, key="age_input")
+        gender_label = st.selectbox(
+            "🚻 Gender",
+            ["Male", "Female"],
+            key="gender_input"
+        )
+
+        race_label = st.selectbox(
+            "🌍 Ras",
+            ["White", "Black or African American", "Asian", "American Indian or Alaska Native"],
+            key="race_input"
+        )
+
+        age_value = st.slider(
+            "📅 Umur saat Diagnosis",
+            float(df["Age_at_diagnosis"].min()),
+            float(df["Age_at_diagnosis"].max()),
+            float(st.session_state.age_input),
+            step=1.0,
+            key="age_input"
+        )
 
         gender_map = {"Male": 0, "Female": 1}
         race_map = {
@@ -138,9 +168,9 @@ with tab2:
             for idx, gene in enumerate(gen_features):
                 with gen_cols[idx % 3]:
                     status = st.radio(
-                        f"{gene}", 
-                        ["-- Pilih --", "Not Mutated", "Mutated"], 
-                        horizontal=True, 
+                        f"{gene}",
+                        ["-- Pilih --", "Not Mutated", "Mutated"],
+                        horizontal=True,
                         key=f"gen_{gene}"
                     )
                     if status == "Not Mutated":
@@ -148,7 +178,7 @@ with tab2:
                     elif status == "Mutated":
                         input_data[gene] = 1
                     else:
-                        input_data[gene] = None  # Belum dipilih
+                        input_data[gene] = None
 
     with col_right:
         st.subheader("📌 Ringkasan Input")
@@ -184,12 +214,13 @@ with tab2:
                 except Exception as e:
                     st.error(f"❌ Terjadi kesalahan saat prediksi: {str(e)}")
 
-        # Tombol Reset akan muncul jika prediksi sudah dilakukan
+        # Tombol Reset jika prediksi sudah dilakukan
         if st.session_state.predict_clicked:
             if st.button("🔁 Reset"):
-                for key in st.session_state.keys():
+                for key in list(st.session_state.keys()):
                     del st.session_state[key]
                 st.rerun()
+
 
 # =======================================
 # TAB 3: Feature Importance
